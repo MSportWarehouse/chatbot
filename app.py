@@ -1,15 +1,14 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from shopify_api import get_products
 import openai
 import os
 from dotenv import load_dotenv
-from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Permitir solo tu dominio
 
-
-app = Flask(__name__)
+# 🔥 Permitir solo el dominio de Shopify
+CORS(app, resources={r"/chat": {"origins": "https://msportwarehouse.com"}})
 
 # Cargar credenciales desde .env
 load_dotenv()
@@ -89,6 +88,7 @@ def chat():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
