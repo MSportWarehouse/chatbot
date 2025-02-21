@@ -3,6 +3,11 @@ from shopify_api import get_products
 import openai
 import os
 from dotenv import load_dotenv
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app, origins=["https://msportwarehouse.com"])  # Permitir solo tu dominio
+
 
 app = Flask(__name__)
 
