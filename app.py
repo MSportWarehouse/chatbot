@@ -30,8 +30,16 @@ SYSTEM_PROMPT = """
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    data = request.json
-    user_message = data.get("message", "").lower()
+    """ Maneja las solicitudes de chat """
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 400
+
+    data = request.get_json()
+    
+    if "message" not in data:
+        return jsonify({"error": "Missing 'message' field"}), 400
+
+    user_message = data["message"].lower().strip()
 
     # Detectar palabras clave en la consulta del usuario
     keywords_playeras = ["playeras", "camisas", "t-shirt", "remeras"]
@@ -43,44 +51,40 @@ def chat():
     if any(word in user_message for word in keywords_playeras):
         # Filtrar playeras
         playeras = [p for p in productos if "oversized" in p.lower() or "t-shirt" in p.lower()]
-        if playeras:
-            bot_reply = "Aquí tienes algunas playeras disponibles:\n" + "\n".join(playeras[:5])
-        else:
-            bot_reply = "No encontré playeras disponibles en este momento."
+        bot_reply = "Aquí tienes algunas playeras disponibles:\n" + "\n".join(playeras[:5]) if playeras else "No encontré playeras disponibles en este momento."
 
     elif any(word in user_message for word in keywords_cascos):
         # Filtrar cascos
         cascos = [p for p in productos if "arai" in p.lower() or "bell" in p.lower() or "schuberth" in p.lower()]
-        if cascos:
-            bot_reply = "Estos son algunos cascos que tenemos disponibles:\n" + "\n".join(cascos[:5])
-        else:
-            bot_reply = "No encontré cascos disponibles en este momento."
+        bot_reply = "Estos son algunos cascos que tenemos disponibles:\n" + "\n".join(cascos[:5]) if cascos else "No encontré cascos disponibles en este momento."
 
     elif any(word in user_message for word in keywords_precios):
         # Muestra cualquier producto con su precio si preguntan por precios en general
-        if productos:
-            bot_reply = "Aquí tienes algunos productos con sus precios:\n" + "\n".join(productos[:5])
-        else:
-            bot_reply = "No tengo información de precios en este momento."
+        bot_reply = "Aquí tienes algunos productos con sus precios:\n" + "\n".join(productos[:5]) if productos else "No tengo información de precios en este momento."
 
     else:
         # Llamada a OpenAI con contexto de sistema
-        client = openai.OpenAI()
+        try:
+            client = openai.OpenAI()
 
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message}
-            ]
-        )
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message}
+                ]
+            )
 
-        bot_reply = response.choices[0].message.content
+            bot_reply = response.choices[0].message.content
+
+        except Exception as e:
+            bot_reply = "Lo siento, no puedo responder en este momento."
 
     return jsonify({"response": bot_reply})
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
