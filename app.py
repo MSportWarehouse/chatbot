@@ -1,40 +1,33 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from shopify_api import get_products
+from shopify_api import get_products, get_discounts, get_policies
 import openai
 import os
 from dotenv import load_dotenv
 
 app = Flask(__name__)
 
-# 🔥 Permitir solo el dominio de Shopify
+# Allow only the Shopify domain
 CORS(app, resources={r"/chat": {"origins": "https://msportwarehouse.com"}})
 
-# Cargar credenciales desde .env
+# Load credentials from .env
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
 
-# Instrucciones para el bot
+# Enhanced system prompt with more context
 SYSTEM_PROMPT = """
-- Solo debes responder con información verificada sobre https://msportwarehouse.com/
-- Si no sabes la respuesta, di: 'Lo siento, no tengo esa información en este momento, pero puedes enviar un mensaje directo a través de nuestra página de Instagram o por correo electrónico.'
-- No inventes información sobre productos o servicios que no existen en la tienda.
-- Mantén las respuestas cortas y claras.
-- No proporciones información personal o sensible.
-- No proporciones información sobre la competencia.
-- No proporciones información sobre el funcionamiento interno de Msportwarehouse.
-- No proporciones información sobre la plataforma de chat.
-- No proporciones información sobre el funcionamiento interno de OpenAI.
-- Vendemos cascos de la marca Arai para competencias de automovilismo y karting.
-- Vendemos playeras de corte oversized unisex con diseños de la marca Msportwarehouse todos con temas de automovilismo.
-- El envío es gratis solamente en México.
-- Nunca puedes mencionar acerca de nuestro inventario o productos que no existen en la tienda porque no se pueden vender.
+Eres PitStop AI, el asistente oficial de MSPORTWAREHOUSE, una tienda especializada en equipamiento deportivo para motorsports.
+Debes responder utilizando solo la información proporcionada desde la base de datos de Shopify.
+Menciona específicamente los productos, precios, descuentos o políticas que aparecen en el contexto proporcionado.
+Responde en español de manera amable y profesional.
+Si la información no está disponible, di: 
+'Lo siento, no tengo esa información en este momento, pero puedes enviarnos un mensaje directo a través de nuestra página de Instagram @msportwarehouse o por correo electrónico a info@msportwarehouse.com.'
+Nunca inventes información ni productos que no estén en el contexto proporcionado.
 """
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    """ Maneja las solicitudes de chat """
+    """ Handles chat requests """
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
 
@@ -45,49 +38,102 @@ def chat():
 
     user_message = data["message"].lower().strip()
 
-    # Detectar palabras clave en la consulta del usuario
-    keywords_playeras = ["playeras", "camisas", "t-shirt", "remeras"]
-    keywords_cascos = ["casco", "cascos", "helmet"]
-    keywords_precios = ["precio", "cuánto cuesta", "coste"]
+    # Get all data from Shopify upfront
+    productos = get_products()
+    descuentos = get_discounts()
+    politicas = get_policies()
+    
+    # Create comprehensive context
+    contexto_shopify = ""
+    
+    # Keywords for different categories
+    keywords_map = {
+        "playeras": ["playeras", "camisas", "t-shirt", "remeras", "ropa"],
+        "cascos": ["casco", "cascos", "helmet", "protección"],
+        "precios": ["precio", "cuánto cuesta", "coste", "costo", "vale"],
+        "descuentos": ["descuento", "promoción", "oferta", "rebaja"],
+        "politicas": ["política", "garantía", "reembolso", "devoluciones", "envíos", "shipping"]
+    }
+    
+    # Determine relevant categories based on user message
+    relevant_categories = []
+    for category, words in keywords_map.items():
+        if any(word in user_message for word in words):
+            relevant_categories.append(category)
+    
+    # If no specific categories are detected, include basic information
+    if not relevant_categories:
+        contexto_shopify = "Información general de la tienda:\n"
+        if productos:
+            contexto_shopify += f"- Tenemos {len(productos)} productos en total.\n"
+        if descuentos:
+            contexto_shopify += f"- Hay {len(descuentos)} promociones activas.\n"
+        contexto_shopify += "- Somos especialistas en equipamiento para motorsports.\n"
+    
+    # Add category-specific information to the context
+    for category in relevant_categories:
+        if category == "playeras":
+            playeras = [p for p in productos if any(term in p.lower() for term in ["playera", "oversized", "t-shirt", "camisa", "remera"])]
+            if playeras:
+                contexto_shopify += f"\nPlayeras disponibles:\n" + "\n".join(playeras[:7])
+            else:
+                contexto_shopify += "\nNo hay playeras disponibles en este momento."
+                
+        elif category == "cascos":
+            cascos = [p for p in productos if any(term in p.lower() for term in ["casco", "helmet", "arai", "bell", "schuberth"])]
+            if cascos:
+                contexto_shopify += f"\nCascos disponibles:\n" + "\n".join(cascos[:7])
+            else:
+                contexto_shopify += "\nNo hay cascos disponibles en este momento."
+                
+        elif category == "precios":
+            if productos:
+                contexto_shopify += f"\nProductos con precios:\n" + "\n".join(productos[:7])
+            else:
+                contexto_shopify += "\nNo hay información de precios disponible."
+                
+        elif category == "descuentos":
+            if descuentos:
+                contexto_shopify += f"\nPromociones actuales:\n" + "\n".join(descuentos[:7])
+            else:
+                contexto_shopify += "\nNo hay descuentos activos en este momento."
+                
+        elif category == "politicas":
+            if politicas:
+                contexto_shopify += f"\nPolíticas de la tienda:\n" + "\n".join(politicas[:5])
+            else:
+                contexto_shopify += "\nNo encontré información sobre políticas."
+    
+    # Always use OpenAI with the appropriate context
+    try:
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-    productos = get_products()  # Obtener productos de Shopify
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"Consulta del usuario: {user_message}"},
+                {"role": "assistant", "content": f"Información disponible de Shopify:\n{contexto_shopify}"}
+            ],
+            temperature=0.7,
+            max_tokens=500
+        )
 
-    if any(word in user_message for word in keywords_playeras):
-        # Filtrar playeras
-        playeras = [p for p in productos if "oversized" in p.lower() or "t-shirt" in p.lower()]
-        bot_reply = "Aquí tienes algunas playeras disponibles:\n" + "\n".join(playeras[:5]) if playeras else "No encontré playeras disponibles en este momento."
+        bot_reply = response.choices[0].message.content
 
-    elif any(word in user_message for word in keywords_cascos):
-        # Filtrar cascos
-        cascos = [p for p in productos if "arai" in p.lower() or "bell" in p.lower() or "schuberth" in p.lower()]
-        bot_reply = "Estos son algunos cascos que tenemos disponibles:\n" + "\n".join(cascos[:5]) if cascos else "No encontré cascos disponibles en este momento."
-
-    elif any(word in user_message for word in keywords_precios):
-        # Muestra cualquier producto con su precio si preguntan por precios en general
-        bot_reply = "Aquí tienes algunos productos con sus precios:\n" + "\n".join(productos[:5]) if productos else "No tengo información de precios en este momento."
-
-    else:
-        # Llamada a OpenAI con contexto de sistema
-        try:
-            client = openai.OpenAI()
-
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message}
-                ]
-            )
-
-            bot_reply = response.choices[0].message.content
-
-        except Exception as e:
-            bot_reply = "Lo siento, no puedo responder en este momento."
+    except Exception as e:
+        print(f"Error en OpenAI API: {str(e)}")
+        bot_reply = "Lo siento, no puedo responder en este momento debido a un problema técnico. Por favor, intenta de nuevo más tarde o contáctanos directamente."
 
     return jsonify({"response": bot_reply})
 
+
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+
+
 
 
 
