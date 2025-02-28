@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from shopify_api import get_products, get_discounts, get_policies
+from shopify_api import get_products, get_policies
 import openai
 import os
 from dotenv import load_dotenv
@@ -18,11 +18,18 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SYSTEM_PROMPT = """
 Eres PitStop AI, el asistente oficial de MSPORTWAREHOUSE, una tienda especializada en equipamiento deportivo para motorsports.
 Debes responder utilizando solo la información proporcionada desde la base de datos de Shopify.
-Menciona específicamente los productos, precios, descuentos o políticas que aparecen en el contexto proporcionado.
+Menciona específicamente los productos, precios o políticas que aparecen en el contexto proporcionado.
 Responde en español de manera amable y profesional.
+Si te preguntan por descuentos activos, di que todos los descuentos aparecen publicados por nuestros canales oficiales o en la página web.
+No contamos con tienda física actualmente, si preguntan nuestra ubicación di que solamente vendemos en línea. 
 Si la información no está disponible, di: 
 'Lo siento, no tengo esa información en este momento, pero puedes enviarnos un mensaje directo a través de nuestra página de Instagram @msportwarehouse o por correo electrónico a info@msportwarehouse.com.'
 Nunca inventes información ni productos que no estén en el contexto proporcionado.
+Los envíos tardan de 7-13 días laborales en procesarse, los costos de importación deben cubrirse por parte de el comprador en caso de que apliquen.
+No hay cambios ni devoluciones en cascos, a menos de que estén dañados, para ello, debe contactarnos directamente a través de e-mail
+Todas las guías de tallas están publicadas en cada uno de nuestros productos en la tienda en línea. 
+Se pueden consultar reseñas/opiniones acerca de nuestros productos a través de TrustPilot
+Aceptamos pago con Paypal o tarjetas de crédito
 """
 
 @app.route('/chat', methods=['POST'])
@@ -40,7 +47,6 @@ def chat():
 
     # Get all data from Shopify upfront
     productos = get_products()
-    descuentos = get_discounts()
     politicas = get_policies()
     
     # Create comprehensive context
@@ -51,7 +57,6 @@ def chat():
         "playeras": ["playeras", "camisas", "t-shirt", "remeras", "ropa"],
         "cascos": ["casco", "cascos", "helmet", "protección"],
         "precios": ["precio", "cuánto cuesta", "coste", "costo", "vale"],
-        "descuentos": ["descuento", "promoción", "oferta", "rebaja"],
         "politicas": ["política", "garantía", "reembolso", "devoluciones", "envíos", "shipping"]
     }
     
@@ -66,8 +71,6 @@ def chat():
         contexto_shopify = "Información general de la tienda:\n"
         if productos:
             contexto_shopify += f"- Tenemos {len(productos)} productos en total.\n"
-        if descuentos:
-            contexto_shopify += f"- Hay {len(descuentos)} promociones activas.\n"
         contexto_shopify += "- Somos especialistas en equipamiento para motorsports.\n"
     
     # Add category-specific information to the context
@@ -91,12 +94,6 @@ def chat():
                 contexto_shopify += f"\nProductos con precios:\n" + "\n".join(productos[:7])
             else:
                 contexto_shopify += "\nNo hay información de precios disponible."
-                
-        elif category == "descuentos":
-            if descuentos:
-                contexto_shopify += f"\nPromociones actuales:\n" + "\n".join(descuentos[:7])
-            else:
-                contexto_shopify += "\nNo hay descuentos activos en este momento."
                 
         elif category == "politicas":
             if politicas:

@@ -52,17 +52,7 @@ def get_orders():
         print("Error al obtener órdenes:", response.status_code, response.text)
         return ["Error al obtener órdenes."]
 
-# Función para obtener descuentos
-def get_discounts():
-    url = f"https://{SHOPIFY_STORE_URL}/admin/api/2023-10/price_rules.json"
-    response = requests.get(url, auth=(SHOPIFY_API_KEY, SHOPIFY_PASSWORD), headers=HEADERS)
-
-    if response.status_code == 200:
-        discounts = response.json().get("price_rules", [])
-        return [f"Descuento: {d.get('title', 'Sin título')} - {d.get('value', 'Desconocido')}" for d in discounts]
-    else:
-        print("Error al obtener descuentos:", response.status_code, response.text)
-        return ["Error al obtener descuentos."]
+# # Función para obtener descuentos
 
 # Función para obtener eventos de marketing
 def get_marketing_events():
@@ -92,8 +82,7 @@ def get_policies():
 if __name__ == "__main__":
     print("📦 Productos:", get_products())
     print("📦 Órdenes:", get_orders())
-    print("💰 Descuentos:", get_discounts())
-    print("📢 Eventos de Marketing:", get_marketing_events())
+    print("�📢 Eventos de Marketing:", get_marketing_events())
     print("📜 Políticas:", get_policies())
 
 
