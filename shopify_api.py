@@ -77,6 +77,48 @@ def get_policies():
     else:
         print("Error al obtener políticas:", response.status_code, response.text)
         return ["Error al obtener políticas."]
+    
+def get_products_by_category(category):
+    """
+    Fetches products by category from Shopify.
+    
+    Args:
+        category (str): The category name to filter products by
+            (e.g., 'playeras', 'cascos', 'guantes', etc.)
+    
+    Returns:
+        list: A list of product strings with their details for the specified category
+    """
+    # Get all products first
+    all_products = get_products()
+    
+    # Define keyword mappings for categories to filter products
+    category_keywords = {
+        "playeras": ["playera", "t-shirt", "camisa", "remera", "jersey", "polera", "oversized"],
+        "cascos": ["casco", "helmet", "arai", "bell", "schuberth", "integral", "modular"],
+        "guantes": ["guante", "glove", "alpinestars", "protection", "hand"],
+        "trajes": ["traje", "suit", "overol", "mono", "racing suit", "alpinestars", "sparco"],
+        "zapatos": ["zapato", "shoe", "boot", "bota", "calzado", "sparco", "alpinestars"],
+        "accesorios": ["accesorio", "accessory", "gadget", "complemento", "soporte", "holder"]
+    }
+    
+    # Check if the category exists in our mapping
+    if category not in category_keywords:
+        return []
+    
+    # Filter products that match the category keywords
+    filtered_products = []
+    keywords = category_keywords[category]
+    
+    for product in all_products:
+        # Convert to lowercase for case-insensitive matching
+        product_lower = product.lower()
+        
+        # Check if any keyword matches
+        if any(keyword in product_lower for keyword in keywords):
+            filtered_products.append(product)
+    
+    return filtered_products
 
 # Ejecuta para ver qué devuelve
 if __name__ == "__main__":
